@@ -32,6 +32,25 @@ def clean_add_punctuation(raw_data):
     return tuple(raw_data)
 
 
+def update_db(cleaned_question, db_name, table_name):
+    mycursor.execute('UPDATE questions SET Question = "sth";')
+    db_name = request.query_params['db_name']
+    table_name = request.query_params['table_name']
+    mydb = mysql.connector.connect(
+        host='localhost',
+        user='root',
+        passwd='',
+        database=db_name
+    )
+    mycursor = mydb.cursor()
+    cmd = f'UPDATE {table_name} SET Question = "{cleaned_question}";'
+    mycursor.execute('UPDATE questions SET Question = "sth";')
+    # UPDATE table_users
+    #     SET cod_user = (case when user_role = 'student' then '622057'
+    #                      when user_role = 'assistant' then '2913659'
+    #                      when user_role = 'admin' then '6160230'
+    #                 end)
+
 
 
 
@@ -55,8 +74,18 @@ def home(request):
     print(nonalpha_strip_data[0:3])
     cleaned_data = list(map(clean_add_punctuation, nonalpha_strip_data))
 
-    
+    mycursor.execute('show columns from questions;')
+    print(list(mycursor))
 
+    mycursor.execute('select * from questions where Option_A="Amperes law";')
+    print(list(mycursor))
+    
+    # mycursor.execute('UPDATE questions SET Question = "sth";')
+
+    # mycursor.execute(f'drop table {table_name};')
+
+
+    print(mycursor.lastrowid)
 
     return Response({'context': 'context'})
 
