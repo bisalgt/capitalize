@@ -1,92 +1,67 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-import mysql.connector
+from sqlalchemy import create_engine
+
+import pandas as pd
+
+first_cleaner = ['{', '[', '$', '#', '<', '-', '+', '±', '∠', '|', 'π','~', '∆' ,'∑', '∏', 'e', 'μ', 'σ', 'n', 'ε', '∞', '' ]
+last_cleaner = ['=','}', ']', ')', '°', '|', 'π', '!', '∆', 'γ', 'μ', 'ε', '∞', ]
+greek_alphabets = ['Α', 'α', 'Β', 'β', 'Γ', 'γ', 'Δ', 'δ', 'Ε', 'ε', 'Ζ', 'ζ', 'Η', 'η', 'Θ', 'θ', 'Ι', 'ι', 'Κ', 'κ', 'Λ', 'λ', 'Μ', 'μ', 'Ν', 'ν','Ξ', 'ξ', 'Ο', 'ο', 'Π', 'π', 'Ρ', 'ρ', 'Σ', 'σ', 'ς', 'Τ', 'τ', 'Υ', 'υ', 'Φ', 'φ', 'Χ', 'χ', 'Ψ', 'ψ','Ω','ω', '∆' ,'∑', '∏', 'e', 'μ', 'σ', 'n', 'ε', '∞']
 
 
-def nonalpha_strip(raw_data):
-    question = raw_data[0]
-    while not question[0].isalpha() or not question[-1].isalpha():
-        if not question[0].isalpha():
+
+def clean_garbage(question):
+    while ((not question[0].isalnum()) and (question[0] not in first_cleaner) and (question[0] not in greek_alphabets)) or ((not question[-1].isalnum()) and (question[-1] not in last_cleaner) and (question[-1] not in greek_alphabets)):
+        if (not question[0].isalnum()) and (question[0] not in first_cleaner) and (question[0] not in greek_alphabets):
             question = question.replace(question[0],'', 1)
-        if not question[-1].isalpha():
+        if (not question[-1].isalnum()) and (question[-1] not in last_cleaner) and (question[-1] not in greek_alphabets):
             question = question[::-1].replace(question[::-1][0], '', 1)[::-1]
-    raw_data = list(raw_data)
-    raw_data[0] = question
-    return tuple(raw_data)
+        print('inside while')
+    print(question)
+    return question
 
-
-def clean_add_punctuation(raw_data):
-    question = raw_data[0]
+def add_punctuation_dots(question):
     wh_list = ['what', 'who', 'whom', 'whose','how', 'where', 'when','why','which']
+    unnecessary_in_wh = ['=', '?']
     question_list = question.lower().split(' ')
     question_filt = [True for q in question_list if q in wh_list]
     question_joined = ' '.join(question_list)
     if any(question_filt):
-        question_joined = question_joined + '?'
+        while question_joined[-1] in unnecessary_in_wh:
+            question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
+            print(question_joined)
+        question_joined = (question_joined).rstrip() + '?'
     else:
-        question_joined = question_joined + '....'    
-        
-    raw_data = list(raw_data)
-    raw_data[0] = question_joined.capitalize()
-    return tuple(raw_data)
-
-
-def update_db(cleaned_question, db_name, table_name):
-    mycursor.execute('UPDATE questions SET Question = "sth";')
-    db_name = request.query_params['db_name']
-    table_name = request.query_params['table_name']
-    mydb = mysql.connector.connect(
-        host='localhost',
-        user='root',
-        passwd='',
-        database=db_name
-    )
-    mycursor = mydb.cursor()
-    cmd = f'UPDATE {table_name} SET Question = "{cleaned_question}";'
-    mycursor.execute('UPDATE questions SET Question = "sth";')
-    # UPDATE table_users
-    #     SET cod_user = (case when user_role = 'student' then '622057'
-    #                      when user_role = 'assistant' then '2913659'
-    #                      when user_role = 'admin' then '6160230'
-    #                 end)
-
+        while question_joined[-1] == '=':
+            question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
+        question_joined = question_joined + '=....'
+    
+    return question_joined.capitalize()
 
 
 
 @api_view(['GET'])
 def home(request):
-    print(request.query_params)
-    db_name = request.query_params['db_name']
-    table_name = request.query_params['table_name']
-    mydb = mysql.connector.connect(
-        host='localhost',
-        user='root',
-        passwd='',
-        database=db_name
-    )
-    mycursor = mydb.cursor()
-    mycursor.execute(f'select * from {table_name};')
-    raw_data = list(mycursor)
-    print(type(raw_data))
+    try:
+        print(request.query_params)
+        db_name = request.query_params['db_name']
+        table_name = request.query_params['table_name']
+        port='3306'
+        user='root'
+        password=''
+        host = 'localhost'
 
-    nonalpha_strip_data = list(map(nonalpha_strip, raw_data))
-    print(nonalpha_strip_data[0:3])
-    cleaned_data = list(map(clean_add_punctuation, nonalpha_strip_data))
-
-    mycursor.execute('show columns from questions;')
-    print(list(mycursor))
-
-    mycursor.execute('select * from questions where Option_A="Amperes law";')
-    print(list(mycursor))
+        # using sqlalchemy engine to connect to db and for queries
+        engine = f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{db_name}'
+        select_cmd = f'select * from {table_name};'
+        df = pd.read_sql(select_cmd, con=engine)
+        df['Question'] = df['Question'].apply(nonalpha_strip)
+        df['Question'] = df['Question'].apply(clean_add_punctuation)
+        df.to_sql('cleaned_db',con=engine, if_exists='replace', index=False)
+        return Response({'context': 'complete'})
     
-    # mycursor.execute('UPDATE questions SET Question = "sth";')
-
-    # mycursor.execute(f'drop table {table_name};')
-
-
-    print(mycursor.lastrowid)
-
-    return Response({'context': 'context'})
+    except:
+        return Response({'error': 'e'})
 
 
