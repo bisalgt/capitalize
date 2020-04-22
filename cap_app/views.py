@@ -1,14 +1,11 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from sqlalchemy import create_engine
 
-import pandas as pd
 
 first_cleaner = ['{', '[', '$', '#', '<', '-', '+', '±', '∠', '|', 'π','~', '∆' ,'∑', '∏', 'e', 'μ', 'σ', 'n', 'ε', '∞', '' ]
 last_cleaner = ['=','}', ']', ')', '°', '|', 'π', '!', '∆', 'γ', 'μ', 'ε', '∞', ]
 greek_alphabets = ['Α', 'α', 'Β', 'β', 'Γ', 'γ', 'Δ', 'δ', 'Ε', 'ε', 'Ζ', 'ζ', 'Η', 'η', 'Θ', 'θ', 'Ι', 'ι', 'Κ', 'κ', 'Λ', 'λ', 'Μ', 'μ', 'Ν', 'ν','Ξ', 'ξ', 'Ο', 'ο', 'Π', 'π', 'Ρ', 'ρ', 'Σ', 'σ', 'ς', 'Τ', 'τ', 'Υ', 'υ', 'Φ', 'φ', 'Χ', 'χ', 'Ψ', 'ψ','Ω','ω', '∆' ,'∑', '∏', 'e', 'μ', 'σ', 'n', 'ε', '∞']
-
 
 
 def clean_garbage(question):
@@ -17,8 +14,6 @@ def clean_garbage(question):
             question = question.replace(question[0],'', 1)
         if (not question[-1].isalnum()) and (question[-1] not in last_cleaner) and (question[-1] not in greek_alphabets):
             question = question[::-1].replace(question[::-1][0], '', 1)[::-1]
-        print('inside while')
-    print(question)
     return question
 
 def add_punctuation_dots(question):
@@ -30,9 +25,9 @@ def add_punctuation_dots(question):
     if any(question_filt):
         while question_joined[-1] in unnecessary_in_wh:
             question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
-            print(question_joined)
         question_joined = (question_joined).rstrip() + '?'
     else:
+        # this while field should be customized later based on other inputs
         while question_joined[-1] == '=':
             question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
         question_joined = question_joined + '=....'
@@ -44,24 +39,12 @@ def add_punctuation_dots(question):
 @api_view(['GET'])
 def home(request):
     try:
-        print(request.query_params)
-        db_name = request.query_params['db_name']
-        table_name = request.query_params['table_name']
-        port='3306'
-        user='root'
-        password=''
-        host = 'localhost'
-
-        # using sqlalchemy engine to connect to db and for queries
-        engine = f'mysql+mysqlconnector://{user}:{password}@{host}:{port}/{db_name}'
-        select_cmd = f'select * from {table_name};'
-        df = pd.read_sql(select_cmd, con=engine)
-        df['Question'] = df['Question'].apply(nonalpha_strip)
-        df['Question'] = df['Question'].apply(clean_add_punctuation)
-        df.to_sql('cleaned_db',con=engine, if_exists='replace', index=False)
-        return Response({'context': 'complete'})
-    
+        question = request.data['question']
+        cleaned_garbage_data = clean_garbage(question)
+        final_data = add_punctuation_dots(cleaned_garbage_data)
+        return Response({'cleaned_question':final_data})
     except:
-        return Response({'error': 'e'})
+        return Response({'error': 'error'})
+
 
 
