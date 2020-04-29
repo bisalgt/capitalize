@@ -48,7 +48,11 @@ import re
 def home(request):
 
     try:
-        question = request.data['question']
+        if request.data:
+            question = request.data['question']
+        elif request.query_params:
+            question = request.query_params['question']
+        print(question)
         
         profanity_status, profanity_probability = predict([question]), predict_prob([question])
         
