@@ -81,5 +81,57 @@ def home(request):
     except:
         return Response({'error': 'error'})
 
+import requests
+import spacy
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+
+nlp = spacy.load('en_core_web_sm')
+stopwords = nlp.Defaults.stop_words
 
 
+def tokenize_and_remove_stopwords(question):
+    cleaned_question = clean_garbage(question)
+    tokenized_question = cleaned_question.split(' ')
+    removed_stopwords = [i for i in tokenized_question if i not in stopwords]
+    return removed_stopwords
+
+
+def sentiment_analyser(data):
+    sid = SentimentIntensityAnalyzer()
+    scores = sid.polarity_scores(data)
+    return scores
+
+
+
+
+@api_view(['GET', 'POST'])
+def check_the_reason_validity(request):
+    try:
+        question = request.data['question']
+        cleaned_question = tokenize_and_remove_stopwords(question)
+        sentiment_question = sentiment_analyser(question)
+        reason = request.data.get('reason')
+        if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
+            link = reason
+            res = requests.get(link)
+            if res.status_code != 200:
+                return Response({'status_code': res.status_code, 'link':link, 'remarks': 'Unable to connect to link'})
+            
+            else:
+                matched_number = [i for i in cleaned_question if i in res.text]
+                found_weight = len(matched_number)*100/len(cleaned_question)
+                return Response({'status_code': res.status_code, 'link':link, 'matched_percentage':round(found_weight,2), 'sentiment_question': sentiment_question})
+        else:
+            cleaned_reason = tokenize_and_remove_stopwords(reason)
+            sentiment_reason = sentiment_analyser(reason)
+            matched = [i for i in cleaned_reason if i in cleaned_question]
+            found_weight = len(matched)*100/len(cleaned_reason)
+            return Response({
+                'question': question,
+                'reason': reason,
+                'matched_percentage':round(found_weight, 2),
+                'sentiment_reason':sentiment_reason,
+                'sentiment_question': sentiment_question
+            })
+    except:
+        return Response({'err': 'err'})
