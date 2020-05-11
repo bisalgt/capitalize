@@ -106,32 +106,64 @@ def sentiment_analyser(data):
 
 @api_view(['GET', 'POST'])
 def check_the_reason_validity(request):
-    try:
-        question = request.data['question']
-        cleaned_question = tokenize_and_remove_stopwords(question)
-        sentiment_question = sentiment_analyser(question)
-        reason = request.data.get('reason')
-        if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
-            link = reason
-            res = requests.get(link)
-            if res.status_code != 200:
-                return Response({'status_code': res.status_code, 'link':link, 'remarks': 'Unable to connect to link'})
-            
-            else:
-                matched_number = [i for i in cleaned_question if i in res.text]
-                found_weight = len(matched_number)*100/len(cleaned_question)
-                return Response({'status_code': res.status_code, 'link':link, 'matched_percentage':round(found_weight,2), 'sentiment_question': sentiment_question})
+    # try:
+    correct_choice = request.data['correct_choice']
+    question = request.data['question']
+    
+    cleaned_choice = tokenize_and_remove_stopwords(correct_choice)
+    cleaned_question = tokenize_and_remove_stopwords(question)
+    cleaned_question += cleaned_choice
+
+    sentiment_question = sentiment_analyser(question)
+    reason = request.data.get('reason')
+    profanity_status, profanity_probability = predict([reason]), predict_prob([reason])
+    if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
+        link = reason
+
+        with open('profane_link_111.txt', 'r') as rf:
+            for i in rf.readlines():
+                if str(i).strip() in link:
+                    return Response({'status': 'to be banned', 'site': link})
+        
+
+        res = requests.get(link)
+
+        if res.status_code != 200:
+            return Response({'status_code': res.status_code, 'link':link, 'remarks': 'Unable to connect to link'})
+        
         else:
-            cleaned_reason = tokenize_and_remove_stopwords(reason)
-            sentiment_reason = sentiment_analyser(reason)
-            matched = [i for i in cleaned_reason if i in cleaned_question]
-            found_weight = len(matched)*100/len(cleaned_reason)
+            matched_number = [i for i in cleaned_question if i in res.text]
+            found_weight = len(matched_number)*100/len(cleaned_question)
             return Response({
-                'question': question,
-                'reason': reason,
-                'matched_percentage':round(found_weight, 2),
-                'sentiment_reason':sentiment_reason,
-                'sentiment_question': sentiment_question
+                'status_code': res.status_code, 
+                'link':link, 
+                'matched_percentage':round(found_weight,2), 
+                'sentiment_question': sentiment_question,
+                'profanity_link':{
+                    'profanity_status': profanity_status,
+                    'profanity_probability': round(profanity_probability[0],4)*100
+                },
             })
-    except:
-        return Response({'err': 'err'})
+    else:
+        cleaned_reason = tokenize_and_remove_stopwords(reason)
+        sentiment_reason = sentiment_analyser(reason)
+        matched = [i for i in cleaned_reason if i in cleaned_question]
+        found_weight = len(matched)*100/len(cleaned_reason)
+        return Response({
+            'question': question,
+            'reason': reason,
+            'matched_percentage':round(found_weight, 2),
+            'sentiment_reason':sentiment_reason,
+            'sentiment_question': sentiment_question,
+            'profanity_reason':{
+                'profanity_status': profanity_status,
+                'profanity_probability': round(profanity_probability[0],4)*100
+            },
+        })
+    # except:
+    #   return Response({'err': 'err'})
+
+
+@api_view(['GET', 'POST'])
+def func(request):
+    pass
