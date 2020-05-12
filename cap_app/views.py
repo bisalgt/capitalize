@@ -48,12 +48,14 @@ import re
 def home(request):
 
     try:
-        if request.data:
-            question = request.data['question']
-        elif request.query_params:
-            question = request.query_params['question']
-        print(question)
-        
+        try:
+            if request.data:
+                question = request.data['question']
+            elif request.query_params:
+                question = request.query_params['question']
+            print(question)
+        except:
+            return Response({'error': 'Unable to get the question from URL'})
         profanity_status, profanity_probability = predict([question]), predict_prob([question])
         
         print(profanity_status, profanity_probability, (int(profanity_status)))
@@ -212,10 +214,10 @@ def clean_csv_to_db(request):
         return Response({'error': 'Unable to read the given file'})
     
     try:
-        df['Question'] = df['Question'].map(clean_garbage)
-        df['Question'] = df['Question'].map(add_punctuation_dots)
+        df['QUESTION'] = df['QUESTION'].map(clean_garbage)
+        df['QUESTION'] = df['QUESTION'].map(add_punctuation_dots)
     except:
-        return Response({'error': 'No question field in the db for cleaning'})
+        return Response({'error': 'No QUESTION field in the db for cleaning'})
 
     splitted_names = file_name.split('/')
     required_name = splitted_names[-1].split('.')[0]
