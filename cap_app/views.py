@@ -175,7 +175,7 @@ from sqlalchemy import create_engine
 
 @api_view(['GET', 'POST'])
 def clean_csv_to_db(request):
-    
+
     try:
         if request.data:
             file_name = request.data['file_name']
@@ -207,3 +207,108 @@ def clean_csv_to_db(request):
         return Response({'error': 'Unable to connect to db'})
     
     return Response({'response':f'Written to table {db_table_to_save} of db playground'})
+
+
+def prepare_csv_to_process(csv_file):
+    df = pd.read_csv(csv_file)
+    if df.columns[0] != 'S.N.':
+        remove_column = df.columns[0]
+        df.drop(columns=remove_column, inplace=True)
+    df.set_index('S.N.')
+    df.columns = ['S.N.','QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D','CORRECT ANSWER' ]
+    return df
+
+
+def save_to_database(df,table_name):
+    engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/playground', echo=False)
+    df.to_sql(table_name, con=engine, if_exists='replace', index=False)
+
+import math
+import numpy as np
+
+@api_view(['GET', 'POST'])
+def randomize_clean_csv_to_db(request):
+
+
+    try:
+        if request.data:
+            file_name = request.data['file_name']
+        elif request.query_params:
+            file_name = request.query_params['file_name']
+    except:
+        return Response({'error': 'Unable to get file from url or request data'})
+
+
+
+    splitted_names = file_name.split('/')
+    required_name = splitted_names[-1].split('.')[0]
+    db_table_to_save = f'cleaned_csv_{required_name}'
+
+    df = prepare_csv_to_process(file_name)
+    try:
+        df = prepare_csv_to_process(file_name)
+    except:
+        return Response({'error': 'Unable to read the given file'})
+
+    df['QUESTION'] = df['QUESTION'].map(clean_garbage)
+    df['QUESTION'] = df['QUESTION'].map(add_punctuation_dots)
+
+    if df.shape[0]%4 == 0:
+        divide_point = int(df.shape[0]/4)
+    else:
+        divide_point = math.floor(df.shape[0]/4)
+        remaining_point = int(df.shape[0]) - (divide_point*4)
+
+    a = ["A"]*divide_point
+    b = ["B"]*divide_point
+    c = ["C"]*divide_point
+    d = ["D"]*(divide_point+remaining_point)
+
+    a.extend(b)
+    a.extend(c)
+    a.extend(d)
+    correct_ans = a
+
+    df["CORRECT ANSWER"] = correct_ans
+
+    dfa = np.split(df, [divide_point], axis=0)
+    dfb = np.split(dfa[1], [divide_point], axis=0)
+    dfc = np.split(dfb[1], [divide_point], axis=0)
+    df1 = dfa[0]
+    df2 = dfb[0]
+    df3 = dfc[0]
+    df4 = dfc[1]
+
+    col_list = list(df2)
+    col_list[2], col_list[3] = col_list[3], col_list[2]
+    df2 = df2.loc[:,col_list]
+
+    col_list = list(df3)
+    col_list[2], col_list[4] = col_list[4], col_list[2]
+    df3 = df3.loc[:,col_list]
+
+    col_list = list(df4)
+    col_list[2], col_list[5] = col_list[5], col_list[2]
+    df4 = df4.loc[:,col_list]
+
+    final_df = pd.DataFrame(np.concatenate( (df1.values, df2.values, df3.values, df4.values), axis=0 ))
+    final_df.columns = ['S.N.','QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D','CORRECT ANSWER']
+
+    df = final_df.sample(frac = 1)
+    df['S.N.'] = range(1,df.shape[0]+1)
+
+    try:
+        save_to_database(df, db_table_to_save)
+        return Response({'response':f'saved to the table {db_table_to_save}'})
+    except:
+        return Response({'error': 'Failed to connect to datase'})
+
+
+
+
+
+
+
+
+
+    
