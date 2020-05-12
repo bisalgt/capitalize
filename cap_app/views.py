@@ -167,10 +167,31 @@ def check_the_reason_validity(request):
         return Response({'err': 'err'})
 
 
+
+
 # clean csv to db
 
 import pandas as pd
 from sqlalchemy import create_engine
+
+
+
+
+def prepare_csv_to_process(csv_file):
+    df = pd.read_csv(csv_file)
+    while df.columns[0] != 'S.N.':
+        remove_column = df.columns[0]
+        df.drop(columns=remove_column, inplace=True)
+    
+    df.columns = ['S.N.','QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D','CORRECT ANSWER' ]
+    return df
+
+
+def save_to_database(df,table_name):
+    engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/playground', echo=False)
+    df.to_sql(table_name, con=engine, if_exists='replace', index=False)
+
+
 
 
 @api_view(['GET', 'POST'])
@@ -186,7 +207,7 @@ def clean_csv_to_db(request):
 
 
     try:
-        df = pd.read_csv(file_name)
+        df = prepare_csv_to_process(file_name)
     except:
         return Response({'error': 'Unable to read the given file'})
     
@@ -201,54 +222,19 @@ def clean_csv_to_db(request):
     db_table_to_save = f'cleaned_csv_{required_name}'
 
     try:
-        engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/playground', echo=False)
-        df.to_sql(db_table_to_save, con=engine, if_exists='replace', index=False)
+        save_to_database(df, db_table_to_save)
+        return Response({'response':f'Written to table {db_table_to_save} of db playground'})
     except:
-        return Response({'error': 'Unable to connect to db'})
-    
-    return Response({'response':f'Written to table {db_table_to_save} of db playground'})
+        return Response({'error': 'Failed during saving to database'})
 
 
-def prepare_csv_to_process(csv_file):
-    df = pd.read_csv(csv_file)
-    if df.columns[0] != 'S.N.':
-        remove_column = df.columns[0]
-        df.drop(columns=remove_column, inplace=True)
-    df.set_index('S.N.')
-    df.columns = ['S.N.','QUESTION', 'OPTION A', 'OPTION B', 'OPTION C', 'OPTION D','CORRECT ANSWER' ]
-    return df
-
-
-def save_to_database(df,table_name):
-    engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/playground', echo=False)
-    df.to_sql(table_name, con=engine, if_exists='replace', index=False)
 
 import math
 import numpy as np
 
-@api_view(['GET', 'POST'])
-def randomize_clean_csv_to_db(request):
 
 
-    try:
-        if request.data:
-            file_name = request.data['file_name']
-        elif request.query_params:
-            file_name = request.query_params['file_name']
-    except:
-        return Response({'error': 'Unable to get file from url or request data'})
-
-
-
-    splitted_names = file_name.split('/')
-    required_name = splitted_names[-1].split('.')[0]
-    db_table_to_save = f'cleaned_csv_{required_name}'
-
-    df = prepare_csv_to_process(file_name)
-    try:
-        df = prepare_csv_to_process(file_name)
-    except:
-        return Response({'error': 'Unable to read the given file'})
+def randomize_clean_csv(df):
 
     df['QUESTION'] = df['QUESTION'].map(clean_garbage)
     df['QUESTION'] = df['QUESTION'].map(add_punctuation_dots)
@@ -297,11 +283,110 @@ def randomize_clean_csv_to_db(request):
     df = final_df.sample(frac = 1)
     df['S.N.'] = range(1,df.shape[0]+1)
 
+    return df
+
+
+
+
+@api_view(['GET', 'POST'])
+def randomize_clean_csv_to_db(request):
+
+
+
+    try:
+        if request.data:
+            file_name = request.data['file_name']
+        elif request.query_params:
+            file_name = request.query_params['file_name']
+    except:
+        return Response({'error': 'Unable to get file from url or request data'})
+
+    try:
+        df = prepare_csv_to_process(file_name)
+    except:
+        return Response({'error': 'Unable to read the given file'})
+
+
+
+    df = randomize_clean_csv(df)
+
+    splitted_names = file_name.split('/')
+    required_name = splitted_names[-1].split('.')[0]
+    db_table_to_save = f'randomize_cleaned_{required_name}'
+    
     try:
         save_to_database(df, db_table_to_save)
-        return Response({'response':f'saved to the table {db_table_to_save}'})
+        return Response({'response':f'Saved to the table: {db_table_to_save}'})
     except:
-        return Response({'error': 'Failed to connect to datase'})
+        return Response({'error': 'Failed during saving to datase'})
+
+
+import random
+import numpy as np
+
+
+@api_view(['GET', 'POST'])
+def insert_options_and_randomize_clean_csv_to_db(request):
+    try:
+        if request.data:
+            file_name = request.data['file_name']
+        elif request.query_params:
+            file_name = request.query_params['file_name']
+    except:
+        return Response({'error': 'Unable to get file from url or request data'})
+    
+    try:
+        df = prepare_csv_to_process(file_name)
+    except:
+        return Response({'error': 'Unable to read the given file'})
+
+    df.drop(columns=df.columns[3:], inplace=True)
+
+    correct_answers = list(df['OPTION A'])
+    
+
+    wrong_options = []
+    for i in range(df.shape[0]):
+        sampling = random.choices(correct_answers, k=4)
+        wrong_options.append(sampling)
+
+    final_wrong_options = []
+    for n, person in enumerate(correct_answers):
+        if person in wrong_options[n]:
+            wrong_options[n].remove(person)
+            final_wrong_options.append(wrong_options[n])
+        else:
+            final_wrong_options.append(wrong_options[n][:-1])
+
+
+    optionB = []
+    optionC = []
+    optionD = []
+    for each in final_wrong_options:
+        optionB.append(each[0])
+        optionC.append(each[1])
+        optionD.append(each[-1])
+
+
+    df['OPTION B'] = optionB
+    df['OPTION C'] = optionC
+    df['OPTION D'] = optionD
+
+
+    df['CORRECT ANSWER'] = np.nan
+
+    df = randomize_clean_csv(df)
+
+    splitted_names = file_name.split('/')
+    required_name = splitted_names[-1].split('.')[0]
+    db_table_to_save = f'insert_options_randomize_cleaned_{required_name}'
+    
+    try:
+        save_to_database(df, db_table_to_save)
+        return Response({'response':f'Saved to the table: {db_table_to_save}'})
+    except:
+        return Response({'error': 'Failed during saving to datase'})
+    
 
 
 
