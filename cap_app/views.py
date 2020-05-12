@@ -106,64 +106,104 @@ def sentiment_analyser(data):
 
 @api_view(['GET', 'POST'])
 def check_the_reason_validity(request):
-    # try:
-    correct_choice = request.data['correct_choice']
-    question = request.data['question']
-    
-    cleaned_choice = tokenize_and_remove_stopwords(correct_choice)
-    cleaned_question = tokenize_and_remove_stopwords(question)
-    cleaned_question += cleaned_choice
-
-    sentiment_question = sentiment_analyser(question)
-    reason = request.data.get('reason')
-    profanity_status, profanity_probability = predict([reason]), predict_prob([reason])
-    if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
-        link = reason
-
-        with open('profane_link_111.txt', 'r') as rf:
-            for i in rf.readlines():
-                if str(i).strip() in link:
-                    return Response({'status': 'to be banned', 'site': link})
+    try:
+        correct_choice = request.data['correct_choice']
+        question = request.data['question']
         
+        cleaned_choice = tokenize_and_remove_stopwords(correct_choice)
+        cleaned_question = tokenize_and_remove_stopwords(question)
+        cleaned_question += cleaned_choice
 
-        res = requests.get(link)
+        sentiment_question = sentiment_analyser(question)
+        reason = request.data.get('reason')
+        profanity_status, profanity_probability = predict([reason]), predict_prob([reason])
+        print(profanity_probability, profanity_status)
+        if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
+            link = reason
 
-        if res.status_code != 200:
-            return Response({'status_code': res.status_code, 'link':link, 'remarks': 'Unable to connect to link'})
-        
+            with open('profane_link_111.txt', 'r') as rf:
+                for i in rf.readlines():
+                    if str(i).strip() in link:
+                        return Response({'status': 'to be banned', 'site': link})
+            
+            try:
+                res = requests.get(link)
+            except:
+                return Response({'err':'Error to get the link'})
+
+            if res.status_code != 200:
+                return Response({'status_code': res.status_code, 'link':link, 'remarks': 'Unable to connect to link'})
+            
+            else:
+                matched_number = [i for i in cleaned_question if i in res.text]
+                found_weight = len(matched_number)*100/len(cleaned_question)
+                return Response({
+                    'status_code': res.status_code, 
+                    'link':link, 
+                    'matched_percentage':round(found_weight,2), 
+                    'sentiment_question': sentiment_question,
+                    'profanity_link':{
+                        'profanity_status': profanity_status,
+                        'profanity_probability': round(profanity_probability[0],4)*100
+                    },
+                })
         else:
-            matched_number = [i for i in cleaned_question if i in res.text]
-            found_weight = len(matched_number)*100/len(cleaned_question)
+            cleaned_reason = tokenize_and_remove_stopwords(reason)
+            sentiment_reason = sentiment_analyser(reason)
+            matched = [i for i in cleaned_reason if i in cleaned_question]
+            found_weight = len(matched)*100/len(cleaned_reason)
             return Response({
-                'status_code': res.status_code, 
-                'link':link, 
-                'matched_percentage':round(found_weight,2), 
+                'question': question,
+                'reason': reason,
+                'matched_percentage':round(found_weight, 2),
+                'sentiment_reason':sentiment_reason,
                 'sentiment_question': sentiment_question,
-                'profanity_link':{
+                'profanity_reason':{
                     'profanity_status': profanity_status,
                     'profanity_probability': round(profanity_probability[0],4)*100
                 },
             })
-    else:
-        cleaned_reason = tokenize_and_remove_stopwords(reason)
-        sentiment_reason = sentiment_analyser(reason)
-        matched = [i for i in cleaned_reason if i in cleaned_question]
-        found_weight = len(matched)*100/len(cleaned_reason)
-        return Response({
-            'question': question,
-            'reason': reason,
-            'matched_percentage':round(found_weight, 2),
-            'sentiment_reason':sentiment_reason,
-            'sentiment_question': sentiment_question,
-            'profanity_reason':{
-                'profanity_status': profanity_status,
-                'profanity_probability': round(profanity_probability[0],4)*100
-            },
-        })
-    # except:
-    #   return Response({'err': 'err'})
+    except:
+        return Response({'err': 'err'})
+
+
+# clean csv to db
+
+import pandas as pd
+from sqlalchemy import create_engine
 
 
 @api_view(['GET', 'POST'])
-def func(request):
-    pass
+def clean_csv_to_db(request):
+    
+    try:
+        if request.data:
+            file_name = request.data['file_name']
+        elif request.query_params:
+            file_name = request.query_params['file_name']
+    except:
+        return Response({'error': 'Unable to get file from url or request data'})
+
+
+    try:
+        df = pd.read_csv(file_name)
+    except:
+        return Response({'error': 'Unable to read the given file'})
+    
+    try:
+        df['Question'] = df['Question'].map(clean_garbage)
+        df['Question'] = df['Question'].map(add_punctuation_dots)
+    except:
+        return Response({'error': 'No question field in the db for cleaning'})
+
+    splitted_names = file_name.split('/')
+    required_name = splitted_names[-1].split('.')[0]
+    db_table_to_save = f'cleaned_csv_{required_name}'
+
+    try:
+        engine = create_engine('mysql+mysqlconnector://root:@localhost:3306/playground', echo=False)
+        df.to_sql(db_table_to_save, con=engine, if_exists='replace', index=False)
+    except:
+        return Response({'error': 'Unable to connect to db'})
+    
+    return Response({'response':f'Written to table {db_table_to_save} of db playground'})
