@@ -103,23 +103,34 @@ def sentiment_analyser(data):
     scores = sid.polarity_scores(data)
     return scores
 
-
-
+import multiprocessing
+import time
+import concurrent.futures
 
 @api_view(['GET', 'POST'])
 def check_the_reason_validity(request):
     try:
+        
         correct_choice = request.data['correct_choice']
         question = request.data['question']
-        
-        cleaned_choice = tokenize_and_remove_stopwords(correct_choice)
-        cleaned_question = tokenize_and_remove_stopwords(question)
-        cleaned_question += cleaned_choice
-
-        sentiment_question = sentiment_analyser(question)
         reason = request.data.get('reason')
+        
+        with concurrent.futures.ProcessPoolExecutor() as executor:
+            p1 = executor.submit(tokenize_and_remove_stopwords, correct_choice)
+            p2 = executor.submit(tokenize_and_remove_stopwords, question)
+        
+        
+        cleaned_choice = p1.result()
+        cleaned_question = p2.result()    
+        cleaned_question.extend(cleaned_choice)
+
+
+        
+        sentiment_question = sentiment_analyser(question)
+        
         profanity_status, profanity_probability = predict([reason]), predict_prob([reason])
-        print(profanity_probability, profanity_status)
+
+
         if reason.__contains__('https://') or reason.__contains__('http://') or reason.__contains__('www.') or reason.__contains__('.com/'):
             link = reason
 
