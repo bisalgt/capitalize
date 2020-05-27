@@ -36,14 +36,10 @@ def add_punctuation_dots(question, add_dots):
         # this while field should be customized later based on other inputs
         while question_joined[-1] == '=':
             question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
-        print('hererererererererer')
-        # print(question_joined)
         if '...' in question_joined and not add_dots:
-            question_joined += question_joined + '.'
-            print(question_joined, 'inside iffff')
+            question_joined = question_joined + '.'
         else:
             question_joined = question_joined + '.....'
-        # print('not herererer')
     return question_joined.capitalize()
 
 import re
@@ -59,7 +55,6 @@ def home(request):
                 question = request.data['question']
             elif request.query_params:
                 question = request.query_params['question']
-            print(question)
             checker_question = question
             checker_question = checker_question.strip()
             if '...' == checker_question[-3:]:
@@ -70,7 +65,7 @@ def home(request):
             return Response({'error': 'Unable to get the question from URL'})
         profanity_status, profanity_probability = predict([question]), predict_prob([question])
         
-        print(profanity_status, profanity_probability, (int(profanity_status)))
+        # print(profanity_status, profanity_probability, (int(profanity_status)))
 
         if int(profanity_status):
             return Response({'profanity': bool(profanity_status), 'profanity_probability': round((profanity_probability[0]),4), 'question': question})
