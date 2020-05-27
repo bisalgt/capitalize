@@ -23,7 +23,7 @@ def clean_garbage(question):
             question = question[::-1].replace(question[::-1][0], '', 1)[::-1]
     return question
 
-def add_punctuation_dots(question):
+def add_punctuation_dots(question, add_dots):
     unnecessary_in_wh = ['=', '?']
     question_list = question.lower().split(' ')
     question_filt = [True for q in question_list if q in wh_list]
@@ -36,8 +36,14 @@ def add_punctuation_dots(question):
         # this while field should be customized later based on other inputs
         while question_joined[-1] == '=':
             question_joined = question_joined[::-1].replace(question_joined[::-1][0], '', 1)[::-1]
-        question_joined = question_joined + '=....'
-    
+        print('hererererererererer')
+        # print(question_joined)
+        if '...' in question_joined and not add_dots:
+            question_joined += question_joined + '.'
+            print(question_joined, 'inside iffff')
+        else:
+            question_joined = question_joined + '.....'
+        # print('not herererer')
     return question_joined.capitalize()
 
 import re
@@ -54,6 +60,12 @@ def home(request):
             elif request.query_params:
                 question = request.query_params['question']
             print(question)
+            checker_question = question
+            checker_question = checker_question.strip()
+            if '...' == checker_question[-3:]:
+                add_dots = True
+            else:
+                add_dots = False
         except:
             return Response({'error': 'Unable to get the question from URL'})
         profanity_status, profanity_probability = predict([question]), predict_prob([question])
@@ -73,9 +85,9 @@ def home(request):
         else:
             temp_question = re.sub('=.*', '', question)
         '''
-
+        
 #        status = temp_question == cleaned_garbage_data
-        final_data = add_punctuation_dots(cleaned_garbage_data)
+        final_data = add_punctuation_dots(cleaned_garbage_data, add_dots)
 
 
 
