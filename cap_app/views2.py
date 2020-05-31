@@ -51,7 +51,7 @@ def cleaner(question, *args):
 
 
 ##### home view to get the question, check profanity and return appropriate response ################################
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 def home(request):
     try:
         try:

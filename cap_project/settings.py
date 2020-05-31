@@ -40,6 +40,9 @@ INSTALLED_APPS = [
 
     # installed apps
     'cap_app',
+
+    # third party apps
+    'rest_framework',
 ]
 
 MIDDLEWARE = [
