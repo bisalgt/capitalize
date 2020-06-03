@@ -408,8 +408,14 @@ def insert_options_and_randomize_clean_csv_to_db(request):
         return Response({'error': 'Failed during saving to datase'})
     
 
+from PIL import Image
 
-
+@api_view(['GET'])
+def get_image_to_process(request):
+    image = request.data.get('image')
+    im = Image.open(image)
+    print(im.size, im.format, im.mode)
+    return Response({'resp': 'resp'})
 
 
 
